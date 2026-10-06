@@ -7,9 +7,10 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Primary and fallback models
 const MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite"
 ];
 
 async function generateWithFallback(systemPrompt) {
@@ -60,16 +61,23 @@ Respond STRICTLY in JSON with two keys:
 
 AVAILABLE ACTIONS:
 - {"type": "walkTo", "target": "player" | "bot" | "last" | "structure_center" | "<part_name>", "vector": [x, y, z]}
-- {"type": "buildStructure", "structureType": "house" | "castle" | "tower" | "bridge" | "staircase" | "arena" | "wall", "color": [r, g, b], "material": "Wood" | "Brick" | "SmoothPlastic" | "Concrete" | "Cobblestone" | "Neon"}
+- {"type": "playAnimation", "animName": "<animation_name>"}
+- {"type": "buildStructure", "structureType": "house" | "castle" | "tower" | "bridge" | "staircase" | "arena" | "wall" | "warehouse", "color": [r, g, b], "material": "Wood" | "Brick" | "SmoothPlastic" | "Concrete" | "Cobblestone" | "Neon"}
+- {"type": "modifyPart", "targetPart": "<part_name>", "sizeDelta": [x, y, z]}
 - {"type": "spawn", "name": "<name>", "shape": "Block" | "Ball" | "Cylinder", "relativeTo": "bot" | "player" | "target", "vector": [x, y, z], "size": [x, y, z], "color": [r, g, b], "material": "SmoothPlastic", "anchored": true, "canCollide": true}
 - {"type": "delete", "target": "last" | "all" | "<part_name>"}
 - {"type": "wait", "seconds": 1}
 - {"type": "jump"}
 
 RULES FOR ENVIRONMENTAL AWARENESS & BUILDING:
-- Check surrounding objects in your context before building to avoid spawning structures inside existing parts or players.
-- Use "buildStructure" for complex requests (house, castle, bridge, tower, arena).
-- If asked to build something complex and navigate it, chain a build action, a short wait, and a walkTo action.`;
+- Check surrounding objects and "playerStandingOnPart" in context before building to avoid spawning structures inside existing parts or players.
+- If asked to modify an existing object (e.g. "make this step bigger"), use "modifyPart" on the part name provided in context rather than spawning a new object.
+- Use "buildStructure" for major requests (house, castle, warehouse, bridge, tower, wall).
+
+RULES FOR ANIMATIONS:
+- Inspect "availableAnimations" in the context object to see available emote names, whether they are looped, and recommended usage.
+- Use looped animations (e.g. "Dance", "Sit") when entering a continuous state or asked to stay in an action.
+- Use non-looped animations (e.g. "Wave", "Point", "Jump") for single gestures or emotional reactions.`;
 
         const rawText = await generateWithFallback(systemPrompt);
         
