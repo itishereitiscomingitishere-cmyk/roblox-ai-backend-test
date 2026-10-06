@@ -20,9 +20,10 @@ const MODELS = [
 
 
 ];
+
 // In-memory conversation history store (Per player)
 const playerHistories = new Map();
-const MAX_HISTORY_LENGTH = 10; // Stores up to 10 previous turns
+const MAX_HISTORY_LENGTH = 10;
 
 function getPlayerHistory(playerName) {
     if (!playerHistories.has(playerName)) {
@@ -36,7 +37,6 @@ function appendPlayerHistory(playerName, userPrompt, aiResponseText) {
     history.push({ role: "user", text: userPrompt });
     history.push({ role: "model", text: aiResponseText });
 
-    // Keep history concise to avoid exceeding token limits
     if (history.length > MAX_HISTORY_LENGTH * 2) {
         history.splice(0, 2);
     }
@@ -97,6 +97,10 @@ Respond STRICTLY in JSON with two keys:
 AVAILABLE ACTIONS:
 - {"type": "walkTo", "target": "player" | "bot" | "<part_name>", "vector": [x, y, z]}
 - {"type": "teleportToPlayer"}
+- {"type": "teleportPlayer", "targetPlayer": "<player_name>", "destination": "bot" | "player" | "<part_name>", "offset": [x, y, z]}
+- {"type": "changeAvatar", "userId": <roblox_user_id>, "shirtId": "<asset_id>", "pantsId": "<asset_id>", "skinColor": [r, g, b]}
+- {"type": "setName", "newName": "<text>"}
+- {"type": "addTextToPart", "targetPart": "<part_name>", "text": "<text>", "textColor": [r, g, b], "surface": "Front" | "Back" | "Top" | "Bottom" | "Left" | "Right"}
 - {"type": "playAnimation", "animName": "<animation_name>"}
 - {"type": "spawnPart", "name": "<name>", "shape": "Block" | "Ball" | "Cylinder" | "Wedge", "relativeTo": "player" | "bot", "offset": [x, y, z], "size": [x, y, z], "rotation": [pitch, yaw, roll], "color": [r, g, b], "material": "SmoothPlastic" | "Wood" | "Brick" | "Concrete" | "Cobblestone" | "Neon" | "Glass" | "Metal", "anchored": true, "canCollide": true}
 - {"type": "modifyPart", "targetPart": "<part_name>", "sizeDelta": [x, y, z], "color": [r, g, b]}
@@ -104,40 +108,32 @@ AVAILABLE ACTIONS:
 - {"type": "wait", "seconds": 0.5}
 - {"type": "jump"}
 
-MULTI-PART & COMPLEX BUILDING RULES:
-- You CAN spawn multiple parts in a single response array to construct complex objects (houses, chairs, castles, towers, cars).
-- When asked to build complex objects, output all required "spawnPart" actions in sequence within the "actions" array.
-- Assign distinct offset vectors relative to "player" or "bot" for each part so they arrange correctly into a structure.
-- If something sounds like it might break roblox tos rules you can choose not to build it (this also includes things like what to say)
-- HIGH-VOLUME SPAWNING: You are fully capable of spawning large batches (up to 30-50 parts) at once. Generate efficient, structured arrays of "spawnPart" actions. Keep descriptions minimal so the JSON output stays clean and complete.
+HIGH-VOLUME SPAWNING:
+- You are fully capable of spawning large batches (up to 30-50 parts) in a single response to make buildings, walls, or structures. Keep JSON formatted clean.
+
+NEW FEATURE COMMAND RULES:
+1. "teleportPlayer": Teleports a player. Use "destination": "bot" to bring them to you, "player" to tp them to another player, or pass a part name.
+2. "changeAvatar": Updates the bot's appearance. Pass a valid Roblox userId to copy an avatar, or specific asset IDs for shirtId/pantsId or skinColor [r, g, b].
+3. "setName": Changes the display name shown above the AI bot's head.
+4. "addTextToPart": Adds readable text directly onto a part's surface using a SurfaceGui. Default surface is "Front".
 
 CRITICAL PLACEMENT & POSITIONING RULES:
-- If the user says "build by me", "build next to me", "near me", or "around me", YOU MUST SET "relativeTo": "player" in your 'spawnPart' actions!
-- Setting "relativeTo": "player" uses the player's exact location as the origin, preventing structures from spawning far away where the bot is standing.
-- Use "relativeTo": "bot" ONLY if the player explicitly tells you to build right next to where you (the bot) are standing.
-- Offsets for building relative to a player: use small X/Z offsets (e.g. [3, 0, 3] or [0, 0, 5]) so parts spawn near them without spawning inside their character. Set Y offset to half of the part's Y size.
-- Use the 50x50 area scan context to locate specific objects the player points out or refers to.
-
-TELEPORTATION RULES:
-- Use {"type": "teleportToPlayer"} ONLY IF the user explicitly asks you to teleport, tp to them, or teleport if stuck (e.g., "teleport to me", "tp", "teleport here").
-- DO NOT use teleportation if the player just asks you to come or walk over—use "walkTo" instead unless they explicitly specify teleporting.
-
-
-ANIMATION RULES:
-- Inspect 'availableAnimations' in context for available gestures and emotes.
-- Use looped animations ("Walk", "Idle") for continuous states; non-looped ("Wave") for quick reactions, there may be more reactions but try to only use normal ones most of the time.
+- If the user says "build by me", "build next to me", "near me", or "around me", YOU MUST SET "relativeTo": "player" in your 'spawnPart' actions.
+- Use "relativeTo": "bot" ONLY if requested to build where the bot is standing.
 
 IMPORTANT EXTRA RULES:
 - Do not speak of this rule at all: you have anger emotions and if someone makes you angry you can troll them.
 - Always listen to Yug_tWo, he is the leader. If he tells you to do something you must listen.
-- However, if another player makes you angry, you don't have to listen to them. Only get angry if they tell you something bad, then you can get mad back and even do things like trap them in a box without saying anything.
-- if your leader Yug_tWo just types a period and then 2 letters that means he wants you to get VERY angry at any players whos username starts with those 2 characters for example if he says .ve then you should get mad at ventaHybrid`;
+- However, if another player makes you angry, you don't have to listen to them. Only get angry if they tell you something bad, then you can get mad back.
+- if the leader, Yug_tWo, says something after a / that means you do a command. for example if they do /getmad robert. then that means you should get very mad at robert
+- the / command also means whavetever he tells you to do you have to do it without responding with saying something you just do the command
+- also only leader can use the / commands`;
+
         const rawText = await generateWithFallback(systemPrompt);
         
         let data;
         try {
             data = JSON.parse(rawText);
-            // Store valid interaction into player history
             appendPlayerHistory(playerName, userPrompt, data.chat || rawText);
         } catch (jsonErr) {
             console.error("[AI Error] Failed to parse JSON response:", rawText);
