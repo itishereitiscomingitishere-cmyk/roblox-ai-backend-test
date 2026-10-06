@@ -9,8 +9,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Recommended active models
 const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-pro"
+  "gemini-3.1-pro-preview",
+  "gemini-3.5-flash"
 ];
 
 async function generateWithFallback(systemPrompt) {
