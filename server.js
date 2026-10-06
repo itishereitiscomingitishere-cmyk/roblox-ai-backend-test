@@ -8,24 +8,23 @@ app.use(express.json());
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Helper function to handle transient 503 / busy errors with retries
-async function generateWithRetry(model, prompt, retries = 3, delayMs = 1000) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
+async function generateWithRetry(userPrompt, systemPrompt) {
+    const modelsToTry = ["gemini-3.8-flash", "gemini-2.5-flash"];
+
+    for (const modelName of modelsToTry) {
         try {
-            const result = await model.generateContent(prompt);
+            const model = genAI.getGenerativeModel({ 
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" }
+            });
+            
+            const result = await model.generateContent(systemPrompt);
             return result.response.text();
         } catch (error) {
-            // Check for 503 (Service Unavailable / High Demand) or 429 (Rate Limit)
-            const isTransientError = error.status === 503 || error.status === 429 || (error.message && error.message.includes('503'));
-            
-            if (isTransientError && attempt < retries) {
-                console.warn(`[AI] Busy (Attempt ${attempt}/${retries}). Retrying in ${delayMs}ms...`);
-                await new Promise((resolve) => setTimeout(resolve, delayMs));
-                delayMs *= 2; // Exponential backoff delay
-            } else {
-                throw error;
-            }
+            console.warn(`[AI] ${modelName} unavailable (${error.status || error.message}). Trying fallback...`);
         }
     }
+    throw new Error("All AI models are currently busy.");
 }
 
 app.post('/command', async (req, res) => {
