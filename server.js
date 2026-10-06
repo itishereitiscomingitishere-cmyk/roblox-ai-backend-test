@@ -7,10 +7,10 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Primary and fallback models using older/stable aliases
+// Recommended active models
 const MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+  "gemini-2.5-flash",
+  "gemini-2.5-pro"
 ];
 
 async function generateWithFallback(systemPrompt) {
