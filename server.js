@@ -8,8 +8,11 @@ app.use(express.json());
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const MODELS = [
-    "gemini-3.1-pro-preview",
-    "gemini-3.5-flash"
+
+    "gemini-3.8-flash",
+
+    "gemini-3.5-flash-lite"
+
 ];
 
 async function generateWithFallback(systemPrompt) {
