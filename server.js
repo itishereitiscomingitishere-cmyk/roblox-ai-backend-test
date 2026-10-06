@@ -7,24 +7,35 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Helper function to handle transient 503 / busy errors with retries
-async function generateWithRetry(userPrompt, systemPrompt) {
-    const modelsToTry = ["gemini-3.8-flash", "gemini-2.5-flash"];
+// List of models in order of preference
+const MODELS = [
+    "gemini-3.8-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+];
 
-    for (const modelName of modelsToTry) {
+async function generateWithFallback(systemPrompt) {
+    let lastError = null;
+
+    for (const modelName of MODELS) {
         try {
             const model = genAI.getGenerativeModel({ 
                 model: modelName,
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: { 
+                    responseMimeType: "application/json",
+                    maxOutputTokens: 100 // Limits output length to speed up delivery
+                }
             });
-            
+
             const result = await model.generateContent(systemPrompt);
             return result.response.text();
         } catch (error) {
-            console.warn(`[AI] ${modelName} unavailable (${error.status || error.message}). Trying fallback...`);
+            console.warn(`[AI] ${modelName} failed (${error.status || error.message}). Trying next fallback model...`);
+            lastError = error;
         }
     }
-    throw new Error("All AI models are currently busy.");
+
+    throw lastError || new Error("All AI models are currently busy.");
 }
 
 app.post('/command', async (req, res) => {
@@ -35,12 +46,6 @@ app.post('/command', async (req, res) => {
             return res.status(400).json({ error: "No prompt provided." });
         }
 
-        // Active production model
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-3.8-flash",
-            generationConfig: { responseMimeType: "application/json" }
-        });
-
         const systemPrompt = `You are an AI game assistant in Roblox. Analyze the user's request: "${userPrompt}".
         Return ONLY valid JSON with two fields:
         1. "action": "move" or "none"
@@ -49,8 +54,7 @@ app.post('/command', async (req, res) => {
         Example request: "move up 10 studs" -> {"action": "move", "vector": [0, 10, 0]}
         Example request: "move left 5 and down 2" -> {"action": "move", "vector": [-5, -2, 0]}`;
 
-        // Call model with auto-retry handling
-        const rawText = await generateWithRetry(model, systemPrompt);
+        const rawText = await generateWithFallback(systemPrompt);
         const data = JSON.parse(rawText);
 
         console.log(`[AI Response] Prompt: "${userPrompt}" ->`, data);
@@ -59,7 +63,6 @@ app.post('/command', async (req, res) => {
     } catch (err) {
         console.error("Error processing prompt:", err.message);
         
-        // Prevents Roblox HttpService from crashing by sending standard error JSON
         res.status(503).json({ 
             success: false, 
             error: "AI service temporarily unavailable. Please try again." 
