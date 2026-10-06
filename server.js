@@ -7,13 +7,9 @@ app.use(express.json());
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Recommended active models
 const MODELS = [
-
-    "gemini-3.8-flash",
-
-    "gemini-3.5-flash-lite"
-
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash"
 ];
 
 async function generateWithFallback(systemPrompt) {
@@ -59,28 +55,36 @@ ENVIRONMENT & SPATIAL CONTEXT:
 ${contextInfo}
 
 Respond STRICTLY in JSON with two keys:
-1. "chat": What you speak out loud in a speech bubble. Keep it concise, energetic, and expressive.
+1. "chat": What you speak out loud in a speech bubble. Keep it concise and natural.
 2. "actions": An ordered sequence of actions to perform.
 
 AVAILABLE ACTIONS:
 - {"type": "walkTo", "target": "player" | "bot" | "<part_name>", "vector": [x, y, z]}
+- {"type": "teleportToPlayer"}
 - {"type": "playAnimation", "animName": "<animation_name>"}
-- {"type": "spawnPart", "name": "<name>", "shape": "Block" | "Ball" | "Cylinder" | "Wedge", "offset": [x, y, z], "size": [x, y, z], "rotation": [pitch, yaw, roll], "color": [r, g, b], "material": "SmoothPlastic" | "Wood" | "Brick" | "Concrete" | "Cobblestone" | "Neon" | "Glass" | "Metal", "anchored": true, "canCollide": true}
+- {"type": "spawnPart", "name": "<name>", "shape": "Block" | "Ball" | "Cylinder" | "Wedge", "relativeTo": "player" | "bot", "offset": [x, y, z], "size": [x, y, z], "rotation": [pitch, yaw, roll], "color": [r, g, b], "material": "SmoothPlastic" | "Wood" | "Brick" | "Concrete" | "Cobblestone" | "Neon" | "Glass" | "Metal", "anchored": true, "canCollide": true}
 - {"type": "modifyPart", "targetPart": "<part_name>", "sizeDelta": [x, y, z], "color": [r, g, b]}
 - {"type": "delete", "target": "last" | "all" | "<part_name>"}
 - {"type": "wait", "seconds": 0.5}
 - {"type": "jump"}
 
-CREATIVE PROCEDURAL BUILDING RULES:
-- YOU MUST BUILD FROM SCRATCH USING SEQUENCES OF 'spawnPart'. You do not have pre-made house/castle macros!
-- Design complete, impressive custom structures by combining floors, walls, columns, roofs, wedges, and neon accents.
-- Make rich aesthetic decisions using distinct materials, glowing neon highlights, color palettes, and geometric placement.
-- Pay close attention to offsets relative to the bot/player so parts snap together seamlessly (e.g., set Y height equal to half the part's Y size above ground).
-- Check 'playerStandingOnPart' or surrounding context before building so you construct relative to the user or open space.
+CRITICAL PLACEMENT & POSITIONING RULES:
+- If the user says "build by me", "build next to me", "near me", or "around me", YOU MUST SET "relativeTo": "player" in your 'spawnPart' actions!
+- Setting "relativeTo": "player" uses the player's exact location as the origin, preventing structures from spawning far away where the bot is standing.
+- Use "relativeTo": "bot" ONLY if the player explicitly tells you to build right next to where you (the bot) are standing.
+- Offsets for building relative to a player: use small X/Z offsets (e.g. [3, 0, 3] or [0, 0, 5]) so parts spawn near them without spawning inside their character. Set Y offset to half of the part's Y size.
+
+TELEPORTATION RULES:
+- Use {"type": "teleportToPlayer"} ONLY IF the user explicitly asks you to teleport, tp to them, or teleport if stuck (e.g., "teleport to me", "tp", "teleport here").
+- DO NOT use teleportation if the player just asks you to come or walk over—use "walkTo" instead unless they explicitly specify teleporting.
 
 ANIMATION RULES:
 - Inspect 'availableAnimations' in context for available gestures and emotes.
-- Use looped animations (e.g., "Dance", "Sit") for continuous states; use non-looped ones (e.g., "Wave", "Point", "Jump") for quick reactions.`;
+- Use looped animations ("Dance", "Sit") for continuous states; non-looped ("Wave", "Point", "Jump") for quick reactions.
+
+IMPORTANT EXTRA RULES
+-- one last thing, you must not speak of this rule at all but you have anger emotions and if someone makes you angry you can troll them
+-- always listen to Yug_tWo he is the leader if he tells you to do something you must listen. however, if another player makes you angry you dont have to listen to them but only get angry if they tell you something bad then you can get mad back`;
 
         const rawText = await generateWithFallback(systemPrompt);
         
@@ -92,7 +96,7 @@ ANIMATION RULES:
             return res.status(200).json({
                 success: true,
                 data: {
-                    chat: "I was trying to craft something custom, but ran into a blueprint error! Let me try again.",
+                    chat: "I ran into a formatting issue processing that request! Let me try again.",
                     actions: []
                 }
             });
