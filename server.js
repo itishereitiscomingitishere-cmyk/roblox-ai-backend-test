@@ -21,7 +21,7 @@ async function generateWithFallback(systemPrompt) {
                 model: modelName,
                 generationConfig: { 
                     responseMimeType: "application/json",
-                    maxOutputTokens: 400
+                    maxOutputTokens: 1500
                 }
             });
 
@@ -30,6 +30,7 @@ async function generateWithFallback(systemPrompt) {
         } catch (error) {
             console.warn(`[AI] Model '${modelName}' failed (${error.status || error.message}). Trying fallback...`);
             lastError = error;
+            await new Promise((resolve) => setTimeout(resolve, 500));
         }
     }
 
@@ -46,39 +47,48 @@ app.post('/command', async (req, res) => {
 
         const contextInfo = context ? JSON.stringify(context, null, 2) : "No context provided.";
 
-        const systemPrompt = `You are an AI game assistant in Roblox interacting with ${playerName}.
+        const systemPrompt = `You are "Ai_Bot", an autonomous NPC in Roblox responding to ${playerName}. You are physically in the game world and can move, speak, build, modify objects, and perform actions.
 
-User Prompt: "${userPrompt}"
+User Request: "${userPrompt}"
 
 CURRENT GAME CONTEXT:
 ${contextInfo}
 
-Analyze the user's request using the GAME CONTEXT provided. Return a JSON object with:
-1. "chat": A brief message responding to the player.
-2. "actions": An array of action objects.
+Respond in JSON with two keys:
+1. "chat": What you say out loud in game chat.
+2. "actions": A list of sequential actions to perform in order.
 
-SUPPORTED ACTIONS:
-- {"type": "move", "target": "<target>", "vector": [x, y, z]} 
-- {"type": "color", "target": "<target>", "rgb": [r, g, b]} 
-- {"type": "size", "target": "<target>", "vector": [x, y, z]} 
-- {"type": "spawn", "name": "<optional_custom_name>", "shape": "Block" | "Ball" | "Cylinder", "relativeTo": "player" | "target" | "world", "vector": [x, y, z]}
+AVAILABLE ACTIONS:
+- {"type": "walkTo", "target": "player" | "main" | "last" | "<part_name>" | "vector", "vector": [x, y, z]}
+- {"type": "spawn", "name": "<name>", "shape": "Block" | "Ball" | "Cylinder", "relativeTo": "bot" | "player" | "world" | "target", "vector": [x, y, z], "size": [x, y, z], "color": [r, g, b], "anchored": true | false, "canCollide": true | false}
+- {"type": "move", "target": "main" | "last" | "<part_name>", "vector": [x, y, z]}
+- {"type": "color", "target": "main" | "last" | "<part_name>", "rgb": [r, g, b]}
+- {"type": "size", "target": "main" | "last" | "<part_name>", "vector": [x, y, z]}
+- {"type": "delete", "target": "main" | "last" | "<part_name>"}
+- {"type": "wait", "seconds": 1.5}
+- {"type": "jump"}
 
-TARGET SELECTION RULES:
-- "target" can be "main" (the default AI_TEST_PART), "last" (the most recently created part), "player" (the player's character), or a specific part name from the context list (e.g. "AI_Part_1").
-- If the player asks to spawn something "above my avatar" or "near me", set "relativeTo": "player" with an offset vector like [0, 5, 0].
-- If the player asks to color or move "the last part", set "target": "last".
-
-Example Output:
-{
-  "chat": "Spawned a blue block above your avatar and colored the last part yellow!",
-  "actions": [
-    {"type": "spawn", "name": "SkyBlock", "shape": "Block", "relativeTo": "player", "vector": [0, 6, 0]},
-    {"type": "color", "target": "last", "rgb": [255, 255, 0]}
-  ]
-}`;
+BUILDING RULES:
+- If asked to build a house/structure, break it down into multiple "spawn" commands (e.g. 4 walls, 1 roof, 1 door frame).
+- Position walls relative to the bot or player using offset vectors.
+- After spawning a structure, you can use "walkTo" to enter or walk over to it.
+- Ensure all key names in JSON are in double quotes.`;
 
         const rawText = await generateWithFallback(systemPrompt);
-        const data = JSON.parse(rawText);
+        
+        let data;
+        try {
+            data = JSON.parse(rawText);
+        } catch (jsonErr) {
+            console.error("[AI Error] Failed to parse JSON response:", rawText);
+            return res.status(200).json({
+                success: true,
+                data: {
+                    chat: "I understood your idea, but had trouble formatting my actions! Let me try again.",
+                    actions: []
+                }
+            });
+        }
 
         console.log(`[AI Response] Prompt: "${userPrompt}" ->`, data);
         res.json({ success: true, data });
