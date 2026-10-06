@@ -21,7 +21,7 @@ async function generateWithFallback(systemPrompt) {
                 model: modelName,
                 generationConfig: { 
                     responseMimeType: "application/json",
-                    maxOutputTokens: 300
+                    maxOutputTokens: 400
                 }
             });
 
@@ -38,33 +38,42 @@ async function generateWithFallback(systemPrompt) {
 
 app.post('/command', async (req, res) => {
     try {
-        const userPrompt = req.body.prompt;
-        const playerName = req.body.player || "Player";
+        const { prompt: userPrompt, player: playerName, context } = req.body;
 
         if (!userPrompt) {
             return res.status(400).json({ error: "No prompt provided." });
         }
 
-        const systemPrompt = `You are an AI assistant in a Roblox game responding to ${playerName}.
-The player said: "${userPrompt}".
+        const contextInfo = context ? JSON.stringify(context, null, 2) : "No context provided.";
 
-Analyze their request and return a valid JSON object with two main fields:
-1. "chat": A brief, friendly message to respond in chat (e.g., "Sure, turning the part red and lifting it!").
-2. "actions": An array of action objects to execute in Roblox.
+        const systemPrompt = `You are an AI game assistant in Roblox interacting with ${playerName}.
 
-Supported Actions:
-- {"type": "move", "vector": [x, y, z]} -> Move target part relative offset
-- {"type": "color", "rgb": [r, g, b]} -> Change target part color (0-255 values)
-- {"type": "size", "vector": [x, y, z]} -> Resize target part
-- {"type": "spawn", "shape": "Block" | "Ball" | "Cylinder", "vector": [x, y, z]} -> Spawn a part at offset relative to target
+User Prompt: "${userPrompt}"
 
-Example Prompt: "make the block red and move it up 10 studs"
+CURRENT GAME CONTEXT:
+${contextInfo}
+
+Analyze the user's request using the GAME CONTEXT provided. Return a JSON object with:
+1. "chat": A brief message responding to the player.
+2. "actions": An array of action objects.
+
+SUPPORTED ACTIONS:
+- {"type": "move", "target": "<target>", "vector": [x, y, z]} 
+- {"type": "color", "target": "<target>", "rgb": [r, g, b]} 
+- {"type": "size", "target": "<target>", "vector": [x, y, z]} 
+- {"type": "spawn", "name": "<optional_custom_name>", "shape": "Block" | "Ball" | "Cylinder", "relativeTo": "player" | "target" | "world", "vector": [x, y, z]}
+
+TARGET SELECTION RULES:
+- "target" can be "main" (the default AI_TEST_PART), "last" (the most recently created part), "player" (the player's character), or a specific part name from the context list (e.g. "AI_Part_1").
+- If the player asks to spawn something "above my avatar" or "near me", set "relativeTo": "player" with an offset vector like [0, 5, 0].
+- If the player asks to color or move "the last part", set "target": "last".
+
 Example Output:
 {
-  "chat": "Done! Made the block red and lifted it 10 studs.",
+  "chat": "Spawned a blue block above your avatar and colored the last part yellow!",
   "actions": [
-    {"type": "color", "rgb": [255, 0, 0]},
-    {"type": "move", "vector": [0, 10, 0]}
+    {"type": "spawn", "name": "SkyBlock", "shape": "Block", "relativeTo": "player", "vector": [0, 6, 0]},
+    {"type": "color", "target": "last", "rgb": [255, 255, 0]}
   ]
 }`;
 
